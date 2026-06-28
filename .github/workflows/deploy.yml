@@ -41,7 +41,7 @@ jobs:
             -o StrictHostKeyChecking=no \
             -P ${{ secrets.SSH_PORT || '22' }} \
             target/release/piano-backend \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/piano-virtual/piano-backend
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/piano-virtual/piano-virtual/piano-backend
 
       - name: Restart service via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -51,7 +51,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
-            chmod +x /home/piano-virtual/piano-backend
+            chmod +x /home/piano-virtual/piano-virtual/piano-backend
             systemctl --user daemon-reload 2>/dev/null || true
             systemctl --user restart piano-backend 2>/dev/null || sudo systemctl restart piano-backend 2>/dev/null || true
             echo "Servicio reiniciado"
