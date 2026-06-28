@@ -1,0 +1,1 @@
+ALTER TABLE key_mappings ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}';

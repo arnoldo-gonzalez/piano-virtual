@@ -1,0 +1,10 @@
+{
+  "name": "piano-virtual",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Frontend is static, use cargo tauri dev instead'",
+    "build": "echo 'No build step needed for static frontend'"
+  }
+}

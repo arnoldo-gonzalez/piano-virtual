@@ -1,0 +1,13 @@
+{
+  "identifier": "default",
+  "description": "Default capability",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "sharesheet:default",
+    "barcode-scanner:default",
+    "barcode-scanner:allow-cancel",
+    "deep-link:default"
+  ]
+}

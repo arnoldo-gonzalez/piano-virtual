@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegram/nicegram/refs/heads/main/.schemas/tauri.schema.json",
+  "productName": "Piano Virtual",
+  "version": "0.1.0",
+  "identifier": "com.pianovirtual.piano",
+  "build": {
+    "frontendDist": "frontend",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Piano Virtual",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["pianovirtual"]
+      },
+      "mobile": [
+        { "host": "add-friend", "pathPrefix": ["/"] }
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico",
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/Square150x150Logo.png",
+      "icons/Square44x44Logo.png",
+      "icons/icon.png",
+      "icons/Square310x310Logo.png"
+    ]
+  }
+}

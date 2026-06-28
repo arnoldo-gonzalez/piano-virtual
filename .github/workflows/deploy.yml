@@ -1,0 +1,55 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLORS: always
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Build release
+        run: cargo build --release -p piano-backend
+        working-directory: backend
+
+      - name: Copy binary and migrations via rsync
+        uses: burnett01/rsync-deployments@7.0.2
+        with:
+          switches: -avz --delete
+          path: backend/target/release/piano-backend
+          remote_path: /opt/piano-virtual/
+          remote_host: ${{ secrets.SSH_HOST }}
+          remote_port: ${{ secrets.SSH_PORT || '22' }}
+          remote_user: ${{ secrets.SSH_USER }}
+          remote_key: ${{ secrets.SSH_KEY }}
+
+      - name: Restart service via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            systemctl --user daemon-reload 2>/dev/null || true
+            systemctl --user restart piano-backend 2>/dev/null || sudo systemctl restart piano-backend 2>/dev/null || true
+            echo "✅ Servicio reiniciado"
