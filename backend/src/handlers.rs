@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::Html,
     Extension, Json,
 };
@@ -13,13 +13,33 @@ use uuid::Uuid;
 use crate::auth;
 use crate::models::*;
 use crate::AppState;
+use chrono::Utc;
+
+static APPS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/apps");
 
 // ---- Auth ----
 
 pub async fn register(
     State(state): State<AppState>,
     Json(body): Json<RegisterRequest>,
-) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 OR username = $1)",
+    )
+    .bind(&body.email)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if exists {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "El correo o nombre de usuario ya está registrado".to_string(),
+            }),
+        ));
+    }
+
     let password_hash = hash(&body.password, DEFAULT_COST).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -29,12 +49,95 @@ pub async fn register(
         )
     })?;
 
-    let user = sqlx::query_as::<_, User>(
-        "INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, 'user') RETURNING *",
+    let code: String = rand::thread_rng()
+        .gen_range(100_000..999_999)
+        .to_string();
+
+    let expires_at = Utc::now() + chrono::Duration::minutes(10);
+
+    sqlx::query("DELETE FROM pending_registrations WHERE email = $1")
+        .bind(&body.email)
+        .execute(&state.db)
+        .await
+        .ok();
+
+    sqlx::query(
+        "INSERT INTO pending_registrations (email, username, password_hash, code, expires_at) \
+         VALUES ($1, $2, $3, $4, $5)",
     )
-    .bind(&body.username)
     .bind(&body.email)
+    .bind(&body.username)
     .bind(&password_hash)
+    .bind(&code)
+    .bind(&expires_at)
+    .execute(&state.db)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Error al guardar registro pendiente: {e}"),
+            }),
+        )
+    })?;
+
+    if let Some(mailer) = &state.mail_config {
+        if let Err(e) = mailer.send_verification_code(&body.email, &code).await {
+            tracing::error!("Error al enviar código de verificación a {}: {}", body.email, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "No se pudo enviar el código de verificación. Intenta de nuevo.".to_string(),
+                }),
+            ));
+        }
+    } else {
+        tracing::info!("Código de verificación para {}: {}", body.email, code);
+    }
+
+    Ok(Json(MessageResponse {
+        message: "Revisa tu correo para el código de verificación.".to_string(),
+    }))
+}
+
+pub async fn verify_email(
+    State(state): State<AppState>,
+    Json(body): Json<VerifyEmailRequest>,
+) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let now = Utc::now();
+
+    let pending = sqlx::query_as::<_, PendingRegistration>(
+        "SELECT * FROM pending_registrations \
+         WHERE email = $1 AND code = $2 AND expires_at > $3 \
+         LIMIT 1",
+    )
+    .bind(&body.email)
+    .bind(&body.code)
+    .bind(&now)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Error al verificar código: {e}"),
+            }),
+        )
+    })?
+    .ok_or((
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse {
+            error: "Código inválido o expirado".to_string(),
+        }),
+    ))?;
+
+    let user = sqlx::query_as::<_, User>(
+        "INSERT INTO users (username, email, password_hash, role, email_verified) \
+         VALUES ($1, $2, $3, 'user', true) RETURNING *",
+    )
+    .bind(&pending.username)
+    .bind(&pending.email)
+    .bind(&pending.password_hash)
     .fetch_one(&state.db)
     .await
     .map_err(|e| {
@@ -48,10 +151,16 @@ pub async fn register(
         (
             status,
             Json(ErrorResponse {
-                error: format!("Error al registrar: {e}"),
+                error: format!("Error al crear usuario: {e}"),
             }),
         )
     })?;
+
+    sqlx::query("DELETE FROM pending_registrations WHERE id = $1")
+        .bind(&pending.id)
+        .execute(&state.db)
+        .await
+        .ok();
 
     let token = auth::create_token(user.id, &user.role).map_err(|e| {
         (
@@ -69,7 +178,75 @@ pub async fn register(
             username: user.username,
             email: user.email,
             role: user.role,
+            email_verified: true,
         },
+    }))
+}
+
+pub async fn resend_code(
+    State(state): State<AppState>,
+    Json(body): Json<ResendCodeRequest>,
+) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let pending = sqlx::query_as::<_, PendingRegistration>(
+        "SELECT * FROM pending_registrations WHERE email = $1",
+    )
+    .bind(&body.email)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Error al buscar registro: {e}"),
+            }),
+        )
+    })?
+    .ok_or((
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            error: "No hay registro pendiente para este correo".to_string(),
+        }),
+    ))?;
+
+    let code: String = rand::thread_rng()
+        .gen_range(100_000..999_999)
+        .to_string();
+
+    let expires_at = Utc::now() + chrono::Duration::minutes(10);
+
+    sqlx::query(
+        "UPDATE pending_registrations SET code = $1, expires_at = $2 WHERE id = $3",
+    )
+    .bind(&code)
+    .bind(&expires_at)
+    .bind(&pending.id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Error al actualizar código: {e}"),
+            }),
+        )
+    })?;
+
+    if let Some(mailer) = &state.mail_config {
+        if let Err(e) = mailer.send_verification_code(&body.email, &code).await {
+            tracing::error!("Error al enviar código a {}: {}", body.email, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "No se pudo enviar el código. Intenta de nuevo.".to_string(),
+                }),
+            ));
+        }
+    } else {
+        tracing::info!("Código reenviado para {}: {}", body.email, code);
+    }
+
+    Ok(Json(MessageResponse {
+        message: "Código reenviado. Revisa tu correo.".to_string(),
     }))
 }
 
@@ -114,6 +291,15 @@ pub async fn login(
         ));
     }
 
+    if !user.email_verified {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "Debes verificar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada o solicita un nuevo código.".to_string(),
+            }),
+        ));
+    }
+
     let token = auth::create_token(user.id, &user.role).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -130,6 +316,7 @@ pub async fn login(
             username: user.username,
             email: user.email,
             role: user.role,
+            email_verified: true,
         },
     }))
 }
@@ -310,7 +497,7 @@ pub async fn create_admin_user(
     })?;
 
     let user = sqlx::query_as::<_, User>(
-        "INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, 'admin') RETURNING *",
+        "INSERT INTO users (username, email, password_hash, role, email_verified) VALUES ($1, $2, $3, 'admin', true) RETURNING *",
     )
     .bind(&body.username)
     .bind(&body.email)
@@ -338,6 +525,7 @@ pub async fn create_admin_user(
         username: user.username,
         email: user.email,
         role: user.role,
+        email_verified: true,
     }))
 }
 
@@ -1144,57 +1332,59 @@ pub async fn log_error(
 }
 
 pub async fn root() -> Html<&'static str> {
-    Html(r#"<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Piano Virtual — Aprende piano online</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0c29;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
-.bg{position:fixed;inset:0;background:linear-gradient(135deg,#0f0c29 0%,#1a1a3e 50%,#16213e 70%,#0f3460 100%);z-index:0}
-.bg::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(ellipse at 30%20%,rgba(74,108,247,0.1) 0%,transparent 60%),radial-gradient(ellipse at 70%80%,rgba(255,160,50,0.06) 0%,transparent 50%)}
-.wrapper{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px 20px}
-.card{background:rgba(255,255,255,0.04);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:48px 40px;max-width:560px;width:100%;text-align:center}
-.logo{font-size:3rem;margin-bottom:12px}
-h1{font-size:2.4rem;font-weight:800;background:linear-gradient(135deg,#4a6cf7,#ffa032);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
-.tagline{font-size:1.05rem;color:#a0a0c0;line-height:1.6;margin-bottom:32px}
-.features{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:32px;text-align:left}
-.feat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px}
-.feat-icon{font-size:1.3rem;margin-bottom:4px}
-.feat h3{font-size:0.85rem;font-weight:700;color:#e0e0e0;margin-bottom:4px}
-.feat p{font-size:0.78rem;color:#8888a8;line-height:1.4}
-.links{display:flex;flex-direction:column;gap:10px;margin-bottom:28px}
-.btn{display:inline-block;padding:12px 28px;border-radius:12px;font-size:1rem;font-weight:700;text-decoration:none;transition:transform .2s,box-shadow .2s}
-.btn:hover{transform:translateY(-2px)}
-.btn-primary{background:linear-gradient(135deg,#4a6cf7,#6a4cf7);color:#fff}
-.btn-primary:hover{box-shadow:0 8px 30px rgba(74,108,247,.35)}
-.btn-secondary{background:rgba(255,255,255,.06);color:#e0e0e0;border:1px solid rgba(255,255,255,.08)}
-.btn-secondary:hover{background:rgba(255,255,255,.1)}
-.api-info{font-size:.8rem;color:#555;border-top:1px solid rgba(255,255,255,.05);padding-top:20px}
-.api-info span{color:#4a6cf7}
-@media(max-width:480px){.card{padding:32px 20px}h1{font-size:1.8rem}.features{grid-template-columns:1fr}}
-</style>
-</head>
-<body>
-<div class="bg"></div>
-<div class="wrapper">
-<div class="card">
-<div class="logo">🎹</div>
-<h1>Piano Virtual</h1>
-<p class="tagline">Aprende a tocar el piano con lecciones interactivas, juega con amigos en multijugador y desafía a otros en duelos musicales.</p>
-<div class="features">
-<div class="feat"><div class="feat-icon">📚</div><h3>Lecciones interactivas</h3><p>Notas en tiempo real con retroalimentación inmediata y progreso personal.</p></div>
-<div class="feat"><div class="feat-icon">👥</div><h3>Multijugador</h3><p>Sesiones en vivo con amigos. Todos tocan la misma lección y compiten.</p></div>
-<div class="feat"><div class="feat-icon">👫</div><h3>Modo parejas</h3><p>Dos personas tocan juntas el mismo piano, cada una su mitad del teclado.</p></div>
-<div class="feat"><div class="feat-icon">🔥</div><h3>Rachas</h3><p>Practica con otros y mantén rachas cada día consecutivo.</p></div>
-</div>
-<div class="api-info">Piano Virtual v0.1.0 · <span>API REST</span></div>
-</div>
-</div>
-</body>
-</html>"#)
+    Html(include_str!("../static/index.html"))
+}
+
+pub async fn invite_page() -> Html<&'static str> {
+    Html(include_str!("../static/invite.html"))
+}
+
+pub async fn asset_links() -> (HeaderMap, &'static str) {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    (headers, include_str!("../static/.well-known/assetlinks.json"))
+}
+
+pub async fn apple_app_site() -> (HeaderMap, &'static str) {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    (
+        headers,
+        include_str!("../static/.well-known/apple-app-site-association"),
+    )
+}
+
+pub async fn download_windows() -> (StatusCode, HeaderMap, Vec<u8>) {
+    serve_app_file("piano-virtual.msi", "application/x-msdownload").await
+}
+
+pub async fn download_android() -> (StatusCode, HeaderMap, Vec<u8>) {
+    serve_app_file("piano-virtual.apk", "application/vnd.android.package-archive").await
+}
+
+async fn serve_app_file(filename: &str, mime: &str) -> (StatusCode, HeaderMap, Vec<u8>) {
+    let path = format!("{APPS_DIR}/{filename}");
+    println!("path {}", path);
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => {
+            let mut headers = HeaderMap::new();
+            headers.insert(header::CONTENT_TYPE, HeaderValue::from_str(mime).unwrap());
+            let disposition = format!("attachment; filename=\"{filename}\"");
+            headers.insert(header::CONTENT_DISPOSITION, HeaderValue::from_str(&disposition).unwrap());
+            (StatusCode::OK, headers, bytes)
+        }
+        Err(_) => {
+            let mut headers = HeaderMap::new();
+            headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("text/plain; charset=utf-8"));
+            (StatusCode::NOT_FOUND, headers, Vec::from("Archivo no disponible"))
+        }
+    }
 }
 
 pub async fn get_app_info(
@@ -2166,6 +2356,45 @@ pub async fn get_my_multiplayer_sessions(
     }
 
     Ok(Json(result))
+}
+
+pub async fn delete_account(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<Uuid>,
+) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let db = &state.db;
+
+    for q in [
+        "DELETE FROM user_progress WHERE user_id = $1",
+        "DELETE FROM friend_requests WHERE sender_id = $1 OR receiver_id = $1",
+        "DELETE FROM friends WHERE user_id = $1 OR friend_id = $1",
+        "DELETE FROM multiplayer_participants WHERE user_id = $1",
+        "DELETE FROM multiplayer_sessions WHERE host_id = $1",
+        "DELETE FROM user_streaks WHERE first_user_id = $1 OR second_user_id = $1",
+        "DELETE FROM key_mappings WHERE user_id = $1",
+        "DELETE FROM user_preferences WHERE user_id = $1",
+        "DELETE FROM lesson_status WHERE created_by = $1",
+        "DELETE FROM audit_logs WHERE user_id = $1",
+    ] {
+        sqlx::query(q).bind(&user_id).execute(db).await.ok();
+    }
+
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(&user_id)
+        .execute(db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Error al eliminar cuenta: {e}"),
+                }),
+            )
+        })?;
+
+    Ok(Json(MessageResponse {
+        message: "Cuenta eliminada correctamente.".to_string(),
+    }))
 }
 
 fn internal_error<E: std::fmt::Display>(e: E) -> (StatusCode, Json<ErrorResponse>) {

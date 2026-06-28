@@ -11,6 +11,7 @@ pub struct User {
     pub password_hash: String,
     pub role: String,
     pub created_at: DateTime<Utc>,
+    pub email_verified: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -74,6 +75,28 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct VerifyEmailRequest {
+    pub email: String,
+    pub code: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResendCodeRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct PendingRegistration {
+    pub id: Uuid,
+    pub email: String,
+    pub username: String,
+    pub password_hash: String,
+    pub code: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AuthResponse {
     pub token: String,
@@ -86,6 +109,7 @@ pub struct UserPublic {
     pub username: String,
     pub email: String,
     pub role: String,
+    pub email_verified: bool,
 }
 
 #[derive(Debug, Deserialize)]

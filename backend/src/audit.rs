@@ -84,7 +84,7 @@ pub async fn audit_middleware(
 
     let db = state.db.clone();
     tokio::spawn(async move {
-        sqlx::query(
+        if let Err(e) = sqlx::query(
             r#"INSERT INTO audit_logs (user_id, method, path, request_body, response_status, response_body, ip_address, duration_ms)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
         )
@@ -98,7 +98,9 @@ pub async fn audit_middleware(
         .bind(duration_ms)
         .execute(&db)
         .await
-        .ok();
+        {
+            tracing::error!("Error al insertar audit_log: {e}");
+        }
     });
 
     response

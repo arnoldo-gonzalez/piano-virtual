@@ -43,6 +43,36 @@ jobs:
             target/release/piano-backend \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/piano-virtual/piano-virtual/piano-backend
 
+      - name: Copy static folder via SCP
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh \
+            -o StrictHostKeyChecking=no \
+            -p ${{ secrets.SSH_PORT || '22' }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p /home/piano-virtual/piano-virtual/static/img"
+          sshpass -e scp \
+            -o StrictHostKeyChecking=no \
+            -P ${{ secrets.SSH_PORT || '22' }} \
+            -r backend/static/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/piano-virtual/piano-virtual/static/
+
+      - name: Copy apps folder via SCP
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh \
+            -o StrictHostKeyChecking=no \
+            -p ${{ secrets.SSH_PORT || '22' }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p /home/piano-virtual/piano-virtual/apps"
+          sshpass -e scp \
+            -o StrictHostKeyChecking=no \
+            -P ${{ secrets.SSH_PORT || '22' }} \
+            -r backend/apps/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/piano-virtual/piano-virtual/apps/
+
       - name: Restart service via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:

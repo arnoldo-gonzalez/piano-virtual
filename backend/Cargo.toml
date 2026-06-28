@@ -12,10 +12,11 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono", "uu
 jsonwebtoken = "9"
 bcrypt = "0.17"
 chrono = { version = "0.4", features = ["serde"] }
-tower-http = { version = "0.6", features = ["cors"] }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 rand = "0.8"
 bytes = "1"
 dotenvy = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+lettre = { version = "0.11", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "builder", "smtp-transport"] }

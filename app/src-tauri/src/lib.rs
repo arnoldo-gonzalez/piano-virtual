@@ -1,16 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 const API_URL: &str = {
     if let Some(url) = option_env!("API_URL") {
         url
     } else {
-        "http://localhost:8000"
+        "https://piano-virtual.alwaysdata.net"
     }
 };
 
 struct AppToken(Mutex<Option<String>>);
+
+struct PendingDeepLink(Mutex<Option<String>>);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RegisterRequest {
@@ -32,10 +35,16 @@ struct AuthResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct MessageResponse {
+    message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct UserPublic {
     id: String,
     username: String,
     email: String,
+    email_verified: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,8 +84,7 @@ async fn register(
     username: String,
     email: String,
     password: String,
-    token_state: State<'_, AppToken>,
-) -> Result<UserPublic, String> {
+) -> Result<String, String> {
     let client = reqwest::Client::new();
     let body = RegisterRequest {
         username,
@@ -96,9 +104,55 @@ async fn register(
         return Err(err.error);
     }
 
+    let msg: MessageResponse = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(msg.message)
+}
+
+#[tauri::command]
+async fn verify_email(
+    email: String,
+    code: String,
+    token_state: State<'_, AppToken>,
+) -> Result<UserPublic, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({ "email": email, "code": code });
+
+    let resp = client
+        .post(format!("{API_URL}/api/verify-email"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let err: ErrorResponse = resp.json().await.map_err(|e| e.to_string())?;
+        return Err(err.error);
+    }
+
     let auth: AuthResponse = resp.json().await.map_err(|e| e.to_string())?;
     *token_state.0.lock().unwrap() = Some(auth.token);
     Ok(auth.user)
+}
+
+#[tauri::command]
+async fn resend_code(email: String) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({ "email": email });
+
+    let resp = client
+        .post(format!("{API_URL}/api/resend-code"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let err: ErrorResponse = resp.json().await.map_err(|e| e.to_string())?;
+        return Err(err.error);
+    }
+
+    let msg: MessageResponse = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(msg.message)
 }
 
 #[tauri::command]
@@ -222,19 +276,28 @@ fn get_api_url() -> String {
     API_URL.to_string()
 }
 
+#[tauri::command]
+fn get_pending_deep_link(state: State<'_, PendingDeepLink>) -> Option<String> {
+    state.0.lock().unwrap().take()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppToken(Mutex::new(None)))
+        .manage(PendingDeepLink(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             register,
             login,
+            verify_email,
+            resend_code,
             get_lessons,
             get_lesson,
             save_progress,
             get_progress,
             get_api_url,
+            get_pending_deep_link,
         ]);
 
     #[cfg(mobile)]
@@ -243,6 +306,19 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
     #[cfg(any(desktop, mobile))]
     let builder = builder.plugin(tauri_plugin_deep_link::init());
+
+    #[cfg(any(desktop, mobile))]
+    let builder = builder.setup(|app| {
+        let handle = app.handle().clone();
+        app.deep_link().on_open_url(move |event| {
+            let urls = event.urls();
+            if let Some(url) = urls.first() {
+                let state = handle.state::<PendingDeepLink>();
+                *state.0.lock().unwrap() = Some(url.to_string());
+            }
+        });
+        Ok(())
+    });
 
     builder.run(tauri::generate_context!())
         .expect("error al ejecutar la aplicación");

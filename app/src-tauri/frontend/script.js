@@ -58,7 +58,7 @@ function setLoading(btn, loading) {
 }
 
 function friendlyError(err, page) {
-    const msg = (err && err.message) || '';
+    const msg = typeof err === 'string' ? err : ((err && err.message) || '');
     logClientError(msg || 'Unknown error', page || window.location.pathname);
     if (!msg || msg === 'Failed to Fetch' || msg === 'Failed to fetch' || msg === 'NetworkError' || msg === 'Load failed' || msg === 'Network request failed') {
         return NETWORK_MSG;
@@ -553,12 +553,16 @@ friendsTabs.forEach(tab => {
     });
 });
 
+function inviteUrl(userId) {
+    return `${API_URL}/invite/${userId}`;
+}
+
 function generateMyQR() {
     const container = document.getElementById('qrcode');
     if (!container || !currentUser) return;
     container.innerHTML = '';
     try {
-        const qrText = `pianovirtual://add-friend/${currentUser.id}`;
+        const qrText = inviteUrl(currentUser.id);
         qrCodeInstance = new QRCode(container, {
             text: qrText,
             width: 180,
@@ -573,7 +577,7 @@ function generateMyQR() {
 function updateDeepLinkDisplay() {
     const el = document.getElementById('my-deep-link');
     if (el && currentUser) {
-        el.textContent = `pianovirtual://add-friend/${currentUser.id}`;
+        el.textContent = inviteUrl(currentUser.id);
     }
 }
 
@@ -599,7 +603,8 @@ document.getElementById('share-deep-link-btn')?.addEventListener('click', async 
 
 // ---- Deep Link Listener ----
 function handleDeepLink(url) {
-    const match = url.match(/pianovirtual:\/\/add-friend\/([a-f0-9-]+)/i);
+    const match = url.match(/pianovirtual:\/\/add-friend\/([a-f0-9-]+)/i) ||
+                  url.match(/\/invite\/([a-f0-9-]+)/i);
     if (!match) return;
     const targetId = match[1];
     if (!currentUser) {
@@ -633,13 +638,17 @@ if (window.__TAURI_INTERNALS__) {
         });
     } catch (err) { logClientError(err?.message || 'deep-link listen error', 'deep-link'); }
     // Check if app was opened via a deep link (cold start)
-    try {
-        window.__TAURI_INTERNALS__.invoke('plugin:deep-link|get_current').then((urls) => {
-            if (Array.isArray(urls) && urls.length > 0) {
-                handleDeepLink(urls[0]);
-            }
-        }).catch((err) => { logClientError(err?.message || 'deep-link cold start error', 'deep-link'); });
-    } catch (err) { logClientError(err?.message || 'deep-link invoke error', 'deep-link'); }
+    async function checkColdStart() {
+        try {
+            const urls = await window.__TAURI_INTERNALS__.invoke('plugin:deep-link|get_current');
+            if (Array.isArray(urls) && urls.length > 0) { handleDeepLink(urls[0]); return; }
+        } catch { /* fallback */ }
+        try {
+            const url = await window.__TAURI_INTERNALS__.invoke('get_pending_deep_link');
+            if (url) handleDeepLink(url);
+        } catch { /* ignore */ }
+    }
+    checkColdStart();
 }
 
 // ---- QR Scanner with Overlay (native plugin) ----
@@ -709,7 +718,8 @@ document.getElementById('scan-start-btn')?.addEventListener('click', async () =>
         if (!result || !result.content) return;
 
         let targetId = result.content;
-        const match = result.content.match(/pianovirtual:\/\/add-friend\/([a-f0-9-]+)/i);
+        const match = result.content.match(/pianovirtual:\/\/add-friend\/([a-f0-9-]+)/i) ||
+                      result.content.match(/\/invite\/([a-f0-9-]+)/i);
         if (match) targetId = match[1];
 
         if (targetId === currentUser.id) {
@@ -1102,8 +1112,6 @@ multiplayerStartBtn?.addEventListener('click', async () => {
     }
 });
 
-duetToggleBtn?.addEventListener('click', toggleDuetMode);
-
 // ---- Settings modal ----
 const settingsModal = document.getElementById('settings-modal');
 const settingsBtn = document.getElementById('settings-btn');
@@ -1166,6 +1174,71 @@ if (passwordForm) {
     });
 }
 
+// ---- Delete account ----
+const deleteAccountBtn = document.getElementById('delete-account-btn');
+const deleteAccountMsg = document.getElementById('delete-account-msg');
+
+if (deleteAccountBtn) {
+    deleteAccountBtn.addEventListener('click', async () => {
+        deleteAccountMsg.textContent = '';
+        if (!token) { deleteAccountMsg.textContent = 'No autenticado'; return; }
+
+        const confirmed = await Swal.fire({
+            title: '¿Eliminar cuenta?',
+            text: 'Todos tus datos se borrarán permanentemente. Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!confirmed.isConfirmed) return;
+
+        const secondConfirm = await Swal.fire({
+            title: '¿Estás seguro?',
+            text: 'Escribe "ELIMINAR" para confirmar',
+            icon: 'warning',
+            input: 'text',
+            inputPlaceholder: 'ELIMINAR',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'Eliminar definitivamente',
+            cancelButtonText: 'Cancelar',
+            preConfirm: (value) => {
+                if (value !== 'ELIMINAR') {
+                    Swal.showValidationMessage('Debes escribir ELIMINAR');
+                }
+            }
+        });
+        if (!secondConfirm.isConfirmed) return;
+
+        setLoading(deleteAccountBtn, true);
+        try {
+            const resp = await fetch(`${API_URL}/api/account`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error);
+            token = null;
+            currentUser = null;
+            Swal.fire({
+                icon: 'success',
+                title: 'Cuenta eliminada',
+                text: data.message,
+                timer: 3000,
+                timerProgressBar: true,
+            });
+            setTimeout(() => window.location.reload(), 3000);
+        } catch (err) {
+            deleteAccountMsg.textContent = friendlyError(err, 'delete-account');
+        } finally {
+            setLoading(deleteAccountBtn, false);
+        }
+    });
+}
+
 // Check connection on load
 setTimeout(async () => {
     const ok = await testConnection(API_URL);
@@ -1201,6 +1274,7 @@ let multiplayerScoreSubmitted = false;
 let duetMode = false;
 const duetToggleBtn = document.getElementById('duet-toggle-btn');
 const duetOverlay = document.getElementById('duet-overlay');
+duetToggleBtn?.addEventListener('click', toggleDuetMode);
 
 // Shared piano config
 const NOTE_NAMES = { 'C': 'Do', 'D': 'Re', 'E': 'Mi', 'F': 'Fa', 'G': 'Sol', 'A': 'La', 'B': 'Si' };
@@ -1379,6 +1453,13 @@ const loginForm = document.getElementById('login-form');
 const registerForm = document.getElementById('register-form');
 const loginError = document.getElementById('login-error');
 const registerError = document.getElementById('register-error');
+const verifySection = document.getElementById('verify-section');
+const registerSuccessMsg = document.getElementById('register-success-msg');
+const verifyCodeInput = document.getElementById('verify-code');
+const verifyBtn = document.getElementById('verify-btn');
+const resendBtn = document.getElementById('resend-btn');
+const verifyBackBtn = document.getElementById('verify-back-btn');
+const verifyError = document.getElementById('verify-error');
 const lessonsList = document.getElementById('lessons-list');
 const lessonTitle = document.getElementById('piano-lesson-title');
 const lessonDescription = document.getElementById('lesson-description');
@@ -1423,6 +1504,7 @@ tabs.forEach(tab => {
         const target = tab.dataset.tab;
         loginForm.style.display = target === 'login' ? 'flex' : 'none';
         registerForm.style.display = target === 'register' ? 'flex' : 'none';
+        verifySection.style.display = 'none';
     });
 });
 
@@ -1455,6 +1537,7 @@ loginForm.addEventListener('submit', async (e) => {
 registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     registerError.textContent = '';
+    verifyError.textContent = '';
     const btn = registerForm.querySelector('button[type="submit"]');
     setLoading(btn, true);
     try {
@@ -1469,14 +1552,71 @@ registerForm.addEventListener('submit', async (e) => {
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error);
-        token = data.token;
-        currentUser = data.user;
-        onAuthSuccess();
+        registerSuccessMsg.textContent = data.message || 'Registro exitoso';
+        registerForm.style.display = 'none';
+        verifySection.style.display = 'flex';
+        verifyCodeInput.value = '';
+        verifyCodeInput.focus();
     } catch (err) {
         registerError.textContent = friendlyError(err, 'register');
     } finally {
         setLoading(btn, false);
     }
+});
+
+verifyBtn.addEventListener('click', async () => {
+    verifyError.textContent = '';
+    const code = verifyCodeInput.value.trim();
+    if (!code || code.length !== 6) {
+        verifyError.textContent = 'Ingresa el código de 6 dígitos';
+        return;
+    }
+    const email = document.getElementById('register-email').value;
+    setLoading(verifyBtn, true);
+    try {
+        const resp = await fetch(`${API_URL}/api/verify-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error);
+        token = data.token;
+        currentUser = data.user;
+        onAuthSuccess();
+    } catch (err) {
+        verifyError.textContent = friendlyError(err, 'verify');
+    } finally {
+        setLoading(verifyBtn, false);
+    }
+});
+
+resendBtn.addEventListener('click', async () => {
+    verifyError.textContent = '';
+    const email = document.getElementById('register-email').value;
+    setLoading(resendBtn, true);
+    try {
+        const resp = await fetch(`${API_URL}/api/resend-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error);
+        verifyError.textContent = '';
+        registerSuccessMsg.textContent = data.message || 'Código reenviado';
+    } catch (err) {
+        verifyError.textContent = friendlyError(err, 'resend');
+    } finally {
+        setLoading(resendBtn, false);
+    }
+});
+
+verifyBackBtn.addEventListener('click', () => {
+    verifySection.style.display = 'none';
+    registerForm.style.display = 'flex';
+    registerForm.reset();
+    registerSuccessMsg.textContent = '';
 });
 
 function onAuthSuccess() {
@@ -1487,6 +1627,7 @@ function onAuthSuccess() {
     lessonsSection.style.display = 'block';
     if (currentUser.role === 'admin') adminBtn.style.display = 'inline-block';
     document.getElementById('password-section').style.display = 'block';
+    document.getElementById('delete-account-section').style.display = 'block';
     refreshConnectionStatus();
     loadLessons();
     checkVersion();
@@ -1504,6 +1645,7 @@ logoutBtn.addEventListener('click', () => {
     adminBtn.style.display = 'none';
     backToLessonsBtn.style.display = 'none';
     document.getElementById('password-section').style.display = 'none';
+    document.getElementById('delete-account-section').style.display = 'none';
     authSection.style.display = 'block';
     lessonsSection.style.display = 'none';
     pianoSection.style.display = 'none';
@@ -1512,6 +1654,8 @@ logoutBtn.addEventListener('click', () => {
     editorSection.style.display = 'none';
     loginForm.reset();
     registerForm.reset();
+    verifySection.style.display = 'none';
+    registerSuccessMsg.textContent = '';
     stopHeartbeat();
     resetMultiplayerSession();
 });

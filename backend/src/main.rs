@@ -1,5 +1,6 @@
 mod audit;
 mod auth;
+mod email;
 mod handlers;
 mod models;
 
@@ -10,17 +11,25 @@ use axum::{
 };
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 
+use crate::email::MailConfig;
 use crate::models::User;
+
+const STATIC_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/static");
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
+    pub mail_config: Option<MailConfig>,
 }
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
+    dotenvy::from_filename(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/.env"),
+    )
+    .ok();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -51,7 +60,14 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let state = AppState { db: pool };
+    let mail_config = MailConfig::from_env();
+    if mail_config.is_some() {
+        tracing::info!("SMTP configurado correctamente");
+    } else {
+        tracing::warn!("SMTP no configurado — los códigos de verificación se mostrarán en el log");
+    }
+
+    let state = AppState { db: pool, mail_config };
 
     let public_routes = Router::new()
         .route("/", get(handlers::root))
@@ -60,7 +76,18 @@ async fn main() {
         .route("/api/lessons", get(handlers::list_lessons))
         .route("/api/lessons/{id}", get(handlers::get_lesson))
         .route("/api/log-error", post(handlers::log_error))
-        .route("/api/app-info", get(handlers::get_app_info));
+        .route("/api/app-info", get(handlers::get_app_info))
+        .route("/api/verify-email", post(handlers::verify_email))
+        .route("/api/resend-code", post(handlers::resend_code))
+        .route("/api/download/windows", get(handlers::download_windows))
+        .route("/api/download/android", get(handlers::download_android))
+        .route("/invite/{code}", get(handlers::invite_page))
+        .route("/invite", get(handlers::invite_page))
+        .route("/.well-known/assetlinks.json", get(handlers::asset_links))
+        .route(
+            "/.well-known/apple-app-site-association",
+            get(handlers::apple_app_site),
+        );
 
     let protected_routes = Router::new()
         .route("/api/progress", post(handlers::save_progress))
@@ -83,6 +110,7 @@ async fn main() {
         .route("/api/multiplayer/session/{session_id}", get(handlers::get_multiplayer_session))
         .route("/api/multiplayer/my-sessions", get(handlers::get_my_multiplayer_sessions))
         .route("/api/streaks", get(handlers::get_user_streaks))
+        .route("/api/account", axum::routing::delete(handlers::delete_account))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth::auth_middleware));
 
     let admin_routes = Router::new()
@@ -117,6 +145,7 @@ async fn main() {
         .merge(admin_routes)
         .layer(middleware::from_fn_with_state(state.clone(), audit::audit_middleware))
         .layer(cors)
+        .nest_service("/static", ServeDir::new(STATIC_DIR))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&bind_addr)
@@ -148,7 +177,7 @@ async fn ensure_admin_exists(db: &PgPool) {
             .expect("Error al hashear contraseña de admin");
 
         sqlx::query(
-            "INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, 'admin')",
+            "INSERT INTO users (username, email, password_hash, role, email_verified) VALUES ($1, $2, $3, 'admin', true)",
         )
         .bind(&username)
         .bind(&email)

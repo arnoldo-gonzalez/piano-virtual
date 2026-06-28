@@ -23,88 +23,43 @@
         </header>
 
         <main>
-            <!-- Auth / Landing -->
-            <section id="auth-section" class="section landing-section">
-                <div class="landing-bg">
-                    <div class="note-float" style="top:10%;left:5%;animation-delay:0s">♪</div>
-                    <div class="note-float" style="top:25%;right:8%;animation-delay:1.2s">♫</div>
-                    <div class="note-float" style="top:55%;left:3%;animation-delay:2.5s">♪</div>
-                    <div class="note-float" style="top:70%;right:5%;animation-delay:0.8s">♩</div>
-                    <div class="note-float" style="top:40%;left:10%;animation-delay:3.2s">♬</div>
-                    <div class="note-float" style="top:15%;right:12%;animation-delay:1.8s">♫</div>
-                </div>
-
-                <div class="landing-hero">
-                    <div class="hero-content">
-                        <span class="hero-badge">🎹 Aprende piano online</span>
-                        <h1 class="hero-title">Tu profesor de<br/><span class="hero-accent">piano virtual</span></h1>
-                        <p class="hero-subtitle">Aprende a tu ritmo con lecciones interactivas, juega con amigos en multijugador y desafía a otros en duelos musicales.</p>
-                        <div class="hero-cta">
-                            <button class="btn primary hero-btn" onclick="document.querySelector('.landing-auth-card').scrollIntoView({behavior:'smooth'})">Comenzar ahora</button>
+            <!-- Auth -->
+            <section id="auth-section" class="section auth-section">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <h1>🎹 Piano Virtual</h1>
+                    </div>
+                    <div class="auth-tabs">
+                        <button class="tab active" data-tab="login">Iniciar sesión</button>
+                        <button class="tab" data-tab="register">Crear cuenta</button>
+                    </div>
+                    <form id="login-form" class="auth-form">
+                        <input type="email" id="login-email" placeholder="Correo electrónico" required />
+                        <div class="password-wrapper">
+                            <input type="password" id="login-password" placeholder="Contraseña" required />
+                            <button type="button" class="btn-toggle-pass" data-target="login-password" title="Mostrar contraseña">👁</button>
                         </div>
-                    </div>
-                    <div class="hero-visual">
-                        <div class="hero-piano-preview">
-                            <div class="hero-key w"></div><div class="hero-key b" style="left:14px"></div><div class="hero-key w"></div><div class="hero-key b" style="left:52px"></div><div class="hero-key w"></div><div class="hero-key w"></div><div class="hero-key b" style="left:106px"></div><div class="hero-key w"></div><div class="hero-key b" style="left:144px"></div><div class="hero-key b" style="left:182px"></div><div class="hero-key w"></div>
+                        <button type="submit" class="btn primary">Entrar</button>
+                        <p id="login-error" class="error"></p>
+                    </form>
+                    <form id="register-form" class="auth-form" style="display:none">
+                        <input type="text" id="register-username" placeholder="Nombre de usuario" required />
+                        <input type="email" id="register-email" placeholder="Correo electrónico" required />
+                        <div class="password-wrapper">
+                            <input type="password" id="register-password" placeholder="Contraseña" required />
+                            <button type="button" class="btn-toggle-pass" data-target="register-password" title="Mostrar contraseña">👁</button>
                         </div>
+                        <button type="submit" class="btn primary">Crear cuenta</button>
+                        <p id="register-error" class="error"></p>
+                    </form>
+                    <div id="verify-section" class="auth-form" style="display:none">
+                        <p id="register-success-msg" class="success"></p>
+                        <input type="text" id="verify-code" placeholder="Código de 6 dígitos" maxlength="6" inputmode="numeric" pattern="[0-9]*" />
+                        <button id="verify-btn" class="btn primary">Verificar correo</button>
+                        <button id="resend-btn" class="btn btn-sm" style="margin-top:8px">Reenviar código</button>
+                        <button id="verify-back-btn" class="btn btn-sm secondary" style="margin-top:4px">Usar otro correo</button>
+                        <p id="verify-error" class="error"></p>
                     </div>
-                </div>
-
-                <div class="landing-features">
-                    <div class="feature-card">
-                        <div class="feature-icon">📚</div>
-                        <h3>Lecciones interactivas</h3>
-                        <p>Notas que caen en tiempo real, retroalimentación inmediata y seguimiento de tu progreso.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">👥</div>
-                        <h3>Multijugador</h3>
-                        <p>Crea sesiones con amigos, compite en la misma lección y compara tus puntuaciones.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">👫</div>
-                        <h3>Modo parejas</h3>
-                        <p>Dos personas tocan juntas el mismo piano. Cada una controla la mitad del teclado.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🔥</div>
-                        <h3>Rachas</h3>
-                        <p>Mantén rachas practicando con otros usuarios. Cada día consecutivo suma a tu racha.</p>
-                    </div>
-                </div>
-
-                <div class="landing-auth-card" id="landing-auth-card">
-                    <div class="auth-card-inner">
-                        <div class="auth-tabs">
-                            <button class="tab active" data-tab="login">Iniciar sesión</button>
-                            <button class="tab" data-tab="register">Crear cuenta</button>
-                        </div>
-                        <form id="login-form" class="auth-form">
-                            <h2>Bienvenido de nuevo</h2>
-                            <input type="email" id="login-email" placeholder="Correo electrónico" required />
-                            <div class="password-wrapper">
-                                <input type="password" id="login-password" placeholder="Contraseña" required />
-                                <button type="button" class="btn-toggle-pass" data-target="login-password" title="Mostrar contraseña">👁</button>
-                            </div>
-                            <button type="submit" class="btn primary">Entrar</button>
-                            <p id="login-error" class="error"></p>
-                        </form>
-                        <form id="register-form" class="auth-form" style="display:none">
-                            <h2>Únete gratis</h2>
-                            <input type="text" id="register-username" placeholder="Nombre de usuario" required />
-                            <input type="email" id="register-email" placeholder="Correo electrónico" required />
-                            <div class="password-wrapper">
-                                <input type="password" id="register-password" placeholder="Contraseña" required />
-                                <button type="button" class="btn-toggle-pass" data-target="register-password" title="Mostrar contraseña">👁</button>
-                            </div>
-                            <button type="submit" class="btn primary">Crear cuenta</button>
-                            <p id="register-error" class="error"></p>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="landing-footer">
-                    <p>Piano Virtual — Aprende música de forma divertida e interactiva</p>
                 </div>
             </section>
 
@@ -350,6 +305,14 @@
             <hr class="settings-divider" />
             </div>
 
+            <hr class="settings-divider" />
+            <div id="delete-account-section" style="display:none">
+                <h3 style="color:#ef4444">⚠️ Zona de peligro</h3>
+                <p style="color:#8888b0;font-size:.85rem;margin-bottom:12px">Eliminarás tu cuenta y todos tus datos de forma permanente. Esta acción no se puede deshacer.</p>
+                <button id="delete-account-btn" class="btn" style="background:#ef4444;color:#fff">Eliminar mi cuenta</button>
+                <p id="delete-account-msg" class="error" style="margin-top:8px"></p>
+            </div>
+            <hr class="settings-divider" />
             <h3>ℹ️ Información de la Aplicación</h3>
             <div class="app-info">
                 <div class="app-info-row"><span>Nombre</span><span>Piano Virtual</span></div>

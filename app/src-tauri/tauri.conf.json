@@ -27,7 +27,7 @@
         "schemes": ["pianovirtual"]
       },
       "mobile": [
-        { "host": "add-friend", "pathPrefix": ["/"] }
+        { "host": "piano-virtual.alwaysdata.net", "pathPrefix": ["/invite"] }
       ]
     }
   },

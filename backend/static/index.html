@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Piano Virtual — Aprende piano online</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;background:#0a0a1a;color:#e0e0e0;overflow-x:hidden;line-height:1.6}
+a{color:inherit;text-decoration:none}
+.bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 20% 30%,rgba(74,108,247,0.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 70%,rgba(255,160,50,0.05) 0%,transparent 50%),linear-gradient(180deg,#0a0a1a 0%,#111133 50%,#0a0a1a 100%)}
+.wrapper{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 24px}
+
+/* ── Nav ── */
+nav{display:flex;align-items:center;justify-content:space-between;padding:20px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.logo{font-size:1.3rem;font-weight:800;background:linear-gradient(135deg,#4a6cf7,#ffa032);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-links{display:flex;gap:24px;font-size:0.9rem;color:#8888b0}
+.nav-links a:hover{color:#e0e0e0}
+
+/* ── Hero ── */
+.hero{text-align:center;padding:80px 0 60px}
+.hero-icon{font-size:4rem;margin-bottom:16px}
+.hero h1{font-size:3.2rem;font-weight:900;background:linear-gradient(135deg,#4a6cf7 0%,#7a5cf7 40%,#ffa032 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.15;margin-bottom:16px}
+.hero p{font-size:1.15rem;color:#8888b0;max-width:640px;margin:0 auto 32px}
+.hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:12px;font-size:1rem;font-weight:700;transition:transform .2s,box-shadow .2s;border:none;cursor:pointer}
+.btn:hover{transform:translateY(-2px)}
+.btn-primary{background:linear-gradient(135deg,#4a6cf7,#6a4cf7);color:#fff}
+.btn-primary:hover{box-shadow:0 8px 30px rgba(74,108,247,.35)}
+.btn-secondary{background:rgba(255,255,255,.06);color:#e0e0e0;border:1px solid rgba(255,255,255,.08)}
+.btn-secondary:hover{background:rgba(255,255,255,.12)}
+.btn-success{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
+.btn-success:hover{box-shadow:0 8px 30px rgba(34,197,94,.35)}
+.btn-outline{background:transparent;color:#e0e0e0;border:1px solid rgba(255,255,255,.15)}
+.btn-outline:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.3)}
+.btn-sm{padding:10px 20px;font-size:.85rem}
+
+/* ── Section common ── */
+section{padding:60px 0}
+.section-title{text-align:center;font-size:2rem;font-weight:800;margin-bottom:8px}
+.section-sub{text-align:center;color:#8888b0;font-size:1rem;margin-bottom:48px;max-width:560px;margin-left:auto;margin-right:auto}
+
+/* ── Features ── */
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.feat-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:28px 24px;transition:border-color .2s,transform .2s}
+.feat-card:hover{border-color:rgba(74,108,247,.3);transform:translateY(-3px)}
+.feat-card .icon{font-size:2rem;margin-bottom:12px}
+.feat-card h3{font-size:1.05rem;font-weight:700;margin-bottom:8px}
+.feat-card p{font-size:.85rem;color:#8888a8;line-height:1.5}
+
+/* ── Download ── */
+.download-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;max-width:800px;margin:0 auto}
+.dl-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:32px;text-align:center;transition:border-color .2s}
+.dl-card:hover{border-color:rgba(255,255,255,.12)}
+.dl-card .icon{font-size:2.8rem;margin-bottom:12px}
+.dl-card h3{font-size:1.1rem;font-weight:700;margin-bottom:6px}
+.dl-card p{font-size:.85rem;color:#8888a8;margin-bottom:20px}
+.dl-card .btn{margin-top:auto}
+
+/* ── Footer ── */
+footer{border-top:1px solid rgba(255,255,255,.04);padding:32px 0;text-align:center;color:#555;font-size:.85rem}
+footer a{color:#7777a0}
+footer a:hover{color:#a0a0c0}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  .hero h1{font-size:2.2rem}
+  .hero{padding:48px 0 40px}
+  .nav-links{display:none}
+  section{padding:40px 0}
+}
+@media(max-width:480px){
+  .hero h1{font-size:1.7rem}
+  .hero-icon{font-size:3rem}
+  .hero p{font-size:1rem}
+}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="wrapper">
+
+<!-- Nav -->
+<nav>
+  <span class="logo">Piano Virtual</span>
+  <div class="nav-links">
+    <a href="#features">Características</a>
+    <a href="#download">Descargar</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-icon">🎹</div>
+  <h1>Piano Virtual</h1>
+  <p>Aprende a tocar el piano con lecciones interactivas, juega con amigos en tiempo real y mantén rachas mientras mejoras tus habilidades musicales.</p>
+  <div class="hero-btns">
+    <a class="btn btn-primary" href="#download">Descargar ahora</a>
+    <a class="btn btn-secondary" href="#features">Explorar</a>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <h2 class="section-title">Todo lo que necesitas</h2>
+  <p class="section-sub">Una plataforma completa para aprender, practicar y competir</p>
+  <div class="features-grid">
+    <div class="feat-card">
+      <div class="icon">📚</div>
+      <h3>Lecciones interactivas</h3>
+      <p>Notas en tiempo real con retroalimentación inmediata. Progreso guardado y dificultad progresiva de principiante a experto.</p>
+    </div>
+    <div class="feat-card">
+      <div class="icon">👥</div>
+      <h3>Multijugador</h3>
+      <p>Crea salas con código, invita amigos y toquen la misma lección compitiendo por la mejor precisión y puntuación.</p>
+    </div>
+    <div class="feat-card">
+      <div class="icon">👫</div>
+      <h3>Modo parejas</h3>
+      <p>Dos personas tocan juntas el mismo piano. Cada quien controla su mitad del teclado. Ideal para dúos y clases.</p>
+    </div>
+    <div class="feat-card">
+      <div class="icon">🔥</div>
+      <h3>Rachas de práctica</h3>
+      <p>Practica con amigos día tras día. Acumula rachas consecutivas y mantén la motivación con desafíos diarios.</p>
+    </div>
+    <div class="feat-card">
+      <div class="icon">🎯</div>
+      <h3>Feedback visual</h3>
+      <p>Highway de notas al estilo guitar hero. Colores por jugador y velocidad ajustable para adaptarse a tu nivel.</p>
+    </div>
+    <div class="feat-card">
+      <div class="icon">📊</div>
+      <h3>Estadísticas</h3>
+      <p>Revisa tu progreso por lección, precisión histórica y rachas activas. Datos sincronizados en la nube.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Download -->
+<section id="download">
+  <h2 class="section-title">Descarga la aplicación</h2>
+  <p class="section-sub">Disponible para Windows y Android. Elige tu plataforma y empieza a tocar.</p>
+  <div class="download-grid">
+    <div class="dl-card">
+      <div class="icon"><img src="/static/img/windows-logo.png" alt="Windows" width="64" height="64" style="display:block;margin:0 auto;object-fit:contain;background:#fff;border-radius:12px"></div>
+      <h3>Windows</h3>
+      <p>Aplicación de escritorio con Tauri. Liviana, rápida y con acceso completo a todas las funciones.</p>
+      <a class="btn btn-primary" href="/api/download/windows">Descargar para Windows</a>
+      <p style="margin-top:10px;font-size:.75rem;color:#555">Instalador .msi · 64 bits</p>
+    </div>
+    <div class="dl-card">
+      <div class="icon"><img src="/static/img/android-logo.png" alt="Android" width="64" height="64" style="display:block;margin:0 auto;object-fit:contain;background:#fff;border-radius:12px"></div>
+      <h3>Android</h3>
+      <p>Lleva el piano a tu tablet o celular. Toca con la pantalla táctil y practica donde sea.</p>
+      <a class="btn btn-success" href="/api/download/android">Descargar para Android</a>
+      <p style="margin-top:10px;font-size:.75rem;color:#555">APK · Requiere Android 8+</p>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>Piano Virtual v0.1.0 — Hecho con 🦀 Rust + Axum + Tauri</p>
+  <p style="margin-top:4px"><a href="https://github.com/arnoldo-gonzalez/piano-virtual" target="_blank">GitHub</a></p>
+</footer>
+
+</div>
+</body>
+</html>
