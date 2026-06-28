@@ -33,19 +33,7 @@ jobs:
       - name: Install sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
 
-      - name: Kill running process via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: ${{ secrets.SSH_PORT || '22' }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          script: |
-            pkill -x piano-backend 2>/dev/null || true
-            sleep 2
-            echo "Proceso terminado"
-
-      - name: Copy binary via SCP
+      - name: Debug server paths
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
@@ -53,12 +41,17 @@ jobs:
             -o StrictHostKeyChecking=no \
             -p ${{ secrets.SSH_PORT || '22' }} \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "mkdir -p /home/piano-virtual/piano-virtual"
+            "whoami; pwd; ls -la /home/piano-virtual/ 2>&1 || echo 'no existe'; ls -la /home/piano-virtual/piano-virtual/ 2>&1 || echo 'no existe'"
+
+      - name: Copy binary via SCP
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
           sshpass -e scp \
             -o StrictHostKeyChecking=no \
             -P ${{ secrets.SSH_PORT || '22' }} \
             target/release/piano-backend \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/piano-virtual/piano-virtual/piano-backend
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/piano-backend-new
 
       - name: Copy static folder via SCP
         env:
@@ -98,7 +91,11 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
+            mkdir -p /home/piano-virtual/piano-virtual
+            mv -f ~/piano-backend-new /home/piano-virtual/piano-virtual/piano-backend 2>/dev/null || cp -f ~/piano-backend-new /home/piano-virtual/piano-virtual/piano-backend
             chmod +x /home/piano-virtual/piano-virtual/piano-backend
+            pkill -x piano-backend 2>/dev/null || true
+            sleep 2
             cd /home/piano-virtual/piano-virtual/
             echo "Iniciando piano-backend..."
             nohup /home/piano-virtual/piano-virtual/piano-backend >> /home/piano-virtual/piano-virtual/app.log 2>&1 &
