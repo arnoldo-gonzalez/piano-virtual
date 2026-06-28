@@ -30,16 +30,16 @@ jobs:
         run: cargo build --release -p piano-backend
         working-directory: backend
 
-      - name: Copy binary and migrations via rsync
-        uses: burnett01/rsync-deployments@7.0.2
+      - name: Copy binary to server via SCP
+        uses: appleboy/scp-action@v0.1.7
         with:
-          switches: -avz --delete
-          path: backend/target/release/piano-backend
-          remote_path: /opt/piano-virtual/
-          remote_host: ${{ secrets.SSH_HOST }}
-          remote_port: ${{ secrets.SSH_PORT || '22' }}
-          remote_user: ${{ secrets.SSH_USER }}
-          remote_key: ${{ secrets.SSH_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: backend/target/release/piano-backend
+          target: /opt/piano-virtual/
+          strip_components: 3
 
       - name: Restart service via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -47,9 +47,9 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT || '22' }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          password: ${{ secrets.SSH_PASSWORD }}
           script: |
-            set -e
+            chmod +x /opt/piano-virtual/piano-backend
             systemctl --user daemon-reload 2>/dev/null || true
             systemctl --user restart piano-backend 2>/dev/null || sudo systemctl restart piano-backend 2>/dev/null || true
-            echo "✅ Servicio reiniciado"
+            echo "Servicio reiniciado"
