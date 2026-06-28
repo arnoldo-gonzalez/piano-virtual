@@ -54,7 +54,7 @@ jobs:
             chmod +x /home/piano-virtual/piano-virtual/piano-backend
             cd /home/piano-virtual/piano-virtual/
             # Mata el proceso si está corriendo
-            pkill -f piano-backend || true
+            pkill -x piano-backend 2>/dev/null || true
             echo "✅ Proceso terminado. El sitio se reiniciará automáticamente."
             # Opcional: verificar que el proceso se haya reiniciado después de unos segundos
             sleep 6
