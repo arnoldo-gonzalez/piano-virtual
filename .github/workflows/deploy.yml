@@ -30,16 +30,18 @@ jobs:
         run: cargo build --release -p piano-backend
         working-directory: backend
 
-      - name: Copy binary to server via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: ${{ secrets.SSH_PORT || '22' }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          source: backend/target/release/piano-backend
-          target: /opt/piano-virtual/
-          strip_components: 3
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Copy binary via SCP
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sshpass -e scp \
+            -o StrictHostKeyChecking=no \
+            -P ${{ secrets.SSH_PORT || '22' }} \
+            backend/target/release/piano-backend \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/piano-virtual/piano-backend
 
       - name: Restart service via SSH
         uses: appleboy/ssh-action@v1.2.0
