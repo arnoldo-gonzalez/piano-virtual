@@ -52,6 +52,15 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           script: |
             chmod +x /home/piano-virtual/piano-virtual/piano-backend
-            systemctl --user daemon-reload 2>/dev/null || true
-            systemctl --user restart piano-backend 2>/dev/null || sudo systemctl restart piano-backend 2>/dev/null || true
-            echo "Servicio reiniciado"
+            cd /home/piano-virtual/piano-virtual/
+            # Mata el proceso si está corriendo
+            pkill -f piano-backend || true
+            echo "✅ Proceso terminado. El sitio se reiniciará automáticamente."
+            # Opcional: verificar que el proceso se haya reiniciado después de unos segundos
+            sleep 6
+            if pgrep -f piano-backend > /dev/null; then
+              echo "✅ La aplicación está corriendo."
+            else
+              echo "⚠️ No se encontró el proceso. Iniciándolo manualmente..."
+              nohup /home/piano-virtual/piano-virtual/piano-backend >> /home/piano-virtual/piano-virtual/app.log 2>&1 &
+            fi
