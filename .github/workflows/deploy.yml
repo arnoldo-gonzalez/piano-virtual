@@ -40,7 +40,7 @@ jobs:
           sshpass -e scp \
             -o StrictHostKeyChecking=no \
             -P ${{ secrets.SSH_PORT || '22' }} \
-            backend/target/release/piano-backend \
+            target/release/piano-backend \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/piano-virtual/piano-backend
 
       - name: Restart service via SSH
