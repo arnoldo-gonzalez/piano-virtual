@@ -37,6 +37,11 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
+          sshpass -e ssh \
+            -o StrictHostKeyChecking=no \
+            -p ${{ secrets.SSH_PORT || '22' }} \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p /home/piano-virtual/piano-virtual"
           sshpass -e scp \
             -o StrictHostKeyChecking=no \
             -P ${{ secrets.SSH_PORT || '22' }} \
