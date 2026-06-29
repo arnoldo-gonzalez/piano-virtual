@@ -39,6 +39,9 @@ async fn main() {
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgresql://admin:admin@localhost:5433/piano_virtual".to_string());
+
+    println!("DATABASE {}", database_url);
+    
     let host = std::env::var("IP").unwrap_or_else(|_| "fd00::7:6953".to_string());
     tracing::info!("HOST NAME (WAS FROM ENV VAR IP OR DEF VALUE {}", host);
     
