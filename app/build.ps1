@@ -1,5 +1,5 @@
 param(
-    [string]$ApiUrl = "http://localhost:8000",
+    [string]$ApiUrl = "https://piano-virtual.alwaysdata.net",
     [ValidateSet("dev", "windows-dev", "android-dev", "windows", "android", "both")]
     [string]$Target = "dev"
 )
