@@ -15,21 +15,19 @@ use tower_http::services::ServeDir;
 
 use crate::email::MailConfig;
 use crate::models::User;
-
-const STATIC_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/static");
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
     pub mail_config: Option<MailConfig>,
+    pub static_dir: PathBuf,
+    pub apps_dir: PathBuf,
 }
 
 #[tokio::main]
 async fn main() {
-    dotenvy::from_filename(
-        concat!(env!("CARGO_MANIFEST_DIR"), "/.env"),
-    )
-    .ok();
+    dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -88,7 +86,13 @@ async fn main() {
         tracing::warn!("SMTP no configurado — los códigos de verificación se mostrarán en el log");
     }
 
-    let state = AppState { db: pool, mail_config };
+    let static_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("static");
+    let apps_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("apps");
+    let state = AppState { db: pool, mail_config, static_dir, apps_dir };
 
     let public_routes = Router::new()
         .route("/", get(handlers::root))
@@ -166,7 +170,7 @@ async fn main() {
         .merge(admin_routes)
         .layer(middleware::from_fn_with_state(state.clone(), audit::audit_middleware))
         .layer(cors)
-        .nest_service("/static", ServeDir::new(STATIC_DIR))
+        .nest_service("/static", ServeDir::new(&state.static_dir))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&bind_addr)

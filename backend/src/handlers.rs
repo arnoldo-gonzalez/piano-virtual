@@ -15,8 +15,6 @@ use crate::models::*;
 use crate::AppState;
 use chrono::Utc;
 
-static APPS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/apps");
-
 // ---- Auth ----
 
 pub async fn register(
@@ -1360,17 +1358,20 @@ pub async fn apple_app_site() -> (HeaderMap, &'static str) {
     )
 }
 
-pub async fn download_windows() -> (StatusCode, HeaderMap, Vec<u8>) {
-    serve_app_file("piano-virtual.msi", "application/x-msdownload").await
+pub async fn download_windows(
+    State(state): State<AppState>,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    serve_app_file(&state.apps_dir, "piano-virtual.msi", "application/x-msdownload").await
 }
 
-pub async fn download_android() -> (StatusCode, HeaderMap, Vec<u8>) {
-    serve_app_file("piano-virtual.apk", "application/vnd.android.package-archive").await
+pub async fn download_android(
+    State(state): State<AppState>,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    serve_app_file(&state.apps_dir, "piano-virtual.apk", "application/vnd.android.package-archive").await
 }
 
-async fn serve_app_file(filename: &str, mime: &str) -> (StatusCode, HeaderMap, Vec<u8>) {
-    let path = format!("{APPS_DIR}/{filename}");
-    println!("path {}", path);
+async fn serve_app_file(apps_dir: &std::path::Path, filename: &str, mime: &str) -> (StatusCode, HeaderMap, Vec<u8>) {
+    let path = apps_dir.join(filename);
     match tokio::fs::read(&path).await {
         Ok(bytes) => {
             let mut headers = HeaderMap::new();
