@@ -63,20 +63,25 @@ pub async fn audit_middleware(
 
     let status = response.status().as_u16() as i32;
     let (parts, body) = response.into_parts();
-    let (response_body, body) = match axum::body::to_bytes(body, MAX_BODY_SIZE).await {
-        Ok(bytes) => {
-            let text = (!bytes.is_empty())
-                .then(|| {
-                    let s = String::from_utf8_lossy(&bytes).to_string();
-                    if s.len() > MAX_BODY_SIZE {
-                        format!("{}...", &s[..MAX_BODY_SIZE])
-                    } else {
-                        s
-                    }
-                });
-            (text, Body::from(bytes))
+    let is_download = parts.headers.get("content-disposition").is_some();
+    let (response_body, body) = if is_download {
+        (None, body)
+    } else {
+        match axum::body::to_bytes(body, MAX_BODY_SIZE).await {
+            Ok(bytes) => {
+                let text = (!bytes.is_empty())
+                    .then(|| {
+                        let s = String::from_utf8_lossy(&bytes).to_string();
+                        if s.len() > MAX_BODY_SIZE {
+                            format!("{}...", &s[..MAX_BODY_SIZE])
+                        } else {
+                            s
+                        }
+                    });
+                (text, Body::from(bytes))
+            }
+            Err(_) => (None, Body::from(Bytes::new())),
         }
-        Err(_) => (None, Body::from(Bytes::new())),
     };
     let response = Response::from_parts(parts, body);
 
