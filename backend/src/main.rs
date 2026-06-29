@@ -45,12 +45,30 @@ async fn main() {
     let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
     let bind_addr = format!("{host}:{port}");
 
-    let pool = PgPool::connect(&database_url)
-        .await
-        .expect("Error al conectar a la base de datos");
+    let pool = loop {
+        match PgPool::connect(&database_url).await {
+            Ok(p) => break p,
+            Err(e) => {
+                tracing::error!("Error al conectar a la base de datos: {e}. Reintentando en 5s...");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    };
 
     let migrator = sqlx::migrate!("./migrations");
-    migrator.run(&pool).await.expect("Error al ejecutar migraciones");
+    for attempt in 1..=5 {
+        match migrator.run(&pool).await {
+            Ok(_) => break,
+            Err(e) => {
+                if attempt == 5 {
+                    tracing::error!("Error al ejecutar migraciones tras 5 intentos: {e}");
+                } else {
+                    tracing::warn!("Error en migración (intento {attempt}/5): {e}. Reintentando...");
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                }
+            }
+        }
+    }
 
     ensure_admin_exists(&pool).await;
     ensure_seed_lessons_public(&pool).await;
